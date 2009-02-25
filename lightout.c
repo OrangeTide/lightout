@@ -1,8 +1,9 @@
 /* lightout.c - Jon Mayo - PUBLIC DOMAIN - February 2009
  * classic lights-out game */
-#include <cairo.h>
-#include <cairo-xlib.h>
 #include <X11/X.h>
+#include <cairo-xlib.h>
+#include <cairo.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,11 +13,12 @@
 #define BOARD_H 5
 
 static const char *argv0, *xdisplay_str;
-static unsigned game_board_width=200, game_board_height=200, game_offset_x=0, game_header_h=40;
+static unsigned game_board_width=500, game_board_height=500, game_offset_x=0, game_header_h=40;
 static Atom atom_wm_delete_window;
 static int board_state[BOARD_W][BOARD_H];
 static unsigned current_level;
-const char *default_font_name="Charter";
+static unsigned board_style=1;
+static const char *default_font_name="Charter";
 
 static const char *level_data[] = {
 	"....."
@@ -320,6 +322,39 @@ static const char *level_data[] = {
 	"XXXXX"
 };
 
+static void _draw_round_rectangle(cairo_t *c, double x, double y, double w, double h, double r) {
+
+	/* radius at most half the width or height */
+	if((r>h/2.))
+		r=h/2.;
+	if((r>w/2.))
+		r=w/2.;
+
+	cairo_save(c);
+	cairo_move_to(c, x, y+r);
+	cairo_arc(c, x+r, y+r, r, M_PI, -M_PI/2.);
+	cairo_line_to(c, x+w-r, y);
+	cairo_arc(c, x+w-r, y+r, r, -M_PI/2., 0.);
+	cairo_line_to(c, x+w, y+h-r);
+	cairo_arc(c, x+w-r, y+h-r, r, 0., M_PI/2.);
+	cairo_line_to(c, x+r, y+h);
+	cairo_arc(c, x+r, y+h-r, r, M_PI/2., M_PI);
+	cairo_close_path(c);
+	cairo_restore(c);
+}
+
+static void _draw_curved_rectangle(cairo_t *c, double x, double y, double w, double h) {
+
+	cairo_save(c);
+	cairo_move_to(c, x, y+h/2.);
+	cairo_curve_to(c, x, y, x, y, x+w/2., y);
+	cairo_curve_to(c, x+w, y, x+w, y, x+w, y+h/2.);
+	cairo_curve_to(c, x+w, y+h, x+w, y+h, x+w/2., y+h);
+	cairo_curve_to(c, x, y+h, x, y+h, x, y+h/2.);
+	cairo_restore(c);
+}
+
+
 static void _paint_head(cairo_t *c) {
 	char buf[64];
 	cairo_text_extents_t te;
@@ -357,7 +392,17 @@ static void _paint_board(cairo_t *c) {
 
 	for(y=0;y<BOARD_H;y++) {
 		for(x=0;x<BOARD_W;x++) {
-			cairo_rectangle(c, x_ofs+button_w*x, y_ofs+button_h*y, button_w*.8, button_h*.8);
+			switch(board_style) {
+				case 1:
+					_draw_curved_rectangle(c, x_ofs+button_w*x, y_ofs+button_h*y, button_w*.8, button_h*.8);
+					break;
+				case 2:
+					_draw_round_rectangle(c, x_ofs+button_w*x, y_ofs+button_h*y, button_w*.8, button_h*.8, button_w/16.);
+					break;
+				default:
+					cairo_rectangle(c, x_ofs+button_w*x, y_ofs+button_h*y, button_w*.8, button_h*.8);
+			}
+
 			if(board_state[x][y]) {
 				cairo_set_source_rgb(c, 0., 0.5, 0.);
 			} else {
@@ -558,7 +603,7 @@ static Display *display_setup(void) {
 }
 
 static void usage(void) {
-	fprintf(stderr, "usage: %s [-display :0.0]\n", argv0);
+	fprintf(stderr, "usage: %s [-display :0.0] [-font <name>] [-level <level>] [-style 0|1|2]\n", argv0);
 	exit(EXIT_FAILURE);
 }
 
@@ -573,6 +618,10 @@ static void process_args(int argc, char **argv) {
 			default_font_name=argv[++i];
 		} else if(!strcasecmp(argv[i], "-level") && i+1<argc) {
 			current_level=strtoul(argv[++i], 0, 10)-1;
+		} else if(!strcasecmp(argv[i], "-style") && i+1<argc) {
+			board_style=strtoul(argv[++i], 0, 10);
+		} else if(!strcasecmp(argv[i], "-help")) {
+			usage();
 		} else {
 			printf("Unknown or invalid option '%s'\n", argv[i]);
 			usage();
