@@ -361,7 +361,7 @@ static void _paint_head(cairo_t *c) {
 	double w=game_board_width+game_offset_x;
 
 	cairo_rectangle(c, 0., 0., w, game_header_h);
-	cairo_set_source_rgb(c, 0., 0.7, 0.5);
+	cairo_set_source_rgb(c, 0., 0., 0.);
 	cairo_fill(c);
 
 	snprintf(buf, sizeof buf, "L%02u", current_level+1);
@@ -382,7 +382,7 @@ static void _paint_board(cairo_t *c) {
 	cairo_translate(c, game_offset_x, game_header_h);
 
 	cairo_rectangle(c, 0., 0., game_board_width, game_board_height);
-	cairo_set_source_rgb(c, 0., 0., 0.5);
+	cairo_set_source_rgb(c, 0., 0., 0.);
 	cairo_fill(c);
 
 	button_w=game_board_width/(double)BOARD_W;
@@ -404,9 +404,9 @@ static void _paint_board(cairo_t *c) {
 			}
 
 			if(board_state[x][y]) {
-				cairo_set_source_rgb(c, 0., 0.5, 0.);
+				cairo_set_source_rgb(c, 1.0, 0.7, 0.0);
 			} else {
-				cairo_set_source_rgb(c, 0.3, 0.3, 0.3);
+				cairo_set_source_rgb(c, 0.2, 0.2, 0.6);
 			}
 			cairo_fill(c);
 
