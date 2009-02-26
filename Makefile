@@ -4,7 +4,7 @@ CPPFLAGS:=$(shell pkg-config --cflags cairo)
 LDLIBS:=$(shell pkg-config --libs cairo)
 ##############################################################################
 EXECNAME:=lightout
-SRCS:=lightout.c framework.c
+SRCS:=drawutil.c framework.c gradient.c lightout.c
 OBJS:=$(SRCS:%.c=%.o)
 ##############################################################################
 all : $(EXECNAME)
