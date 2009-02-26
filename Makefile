@@ -1,8 +1,15 @@
+##############################################################################
 CFLAGS:=-Wall -g
 CPPFLAGS:=$(shell pkg-config --cflags cairo)
 LDLIBS:=$(shell pkg-config --libs cairo)
-
-all : lightout
+##############################################################################
+EXECNAME:=lightout
+SRCS:=lightout.c framework.c
+OBJS:=$(SRCS:%.c=%.o)
+##############################################################################
+all : $(EXECNAME)
 
 clean :
-	$(RM) lightout
+	$(RM) $(EXECNAME) $(OBJS)
+##############################################################################
+$(EXECNAME) : $(OBJS)

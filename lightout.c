@@ -8,17 +8,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "framework.h"
+#include "modules.h"
 
 #define BOARD_W 5
 #define BOARD_H 5
 
-static const char *argv0, *xdisplay_str;
-static unsigned game_board_width=500, game_board_height=500, game_offset_x=0, game_header_h=40;
-static Atom atom_wm_delete_window;
 static int board_state[BOARD_W][BOARD_H];
 static unsigned current_level;
-static unsigned board_style=1;
-static const char *default_font_name="Charter";
 
 static const char *level_data[] = {
 	"....."
@@ -358,19 +355,19 @@ static void _draw_curved_rectangle(cairo_t *c, double x, double y, double w, dou
 static void _paint_head(cairo_t *c) {
 	char buf[64];
 	cairo_text_extents_t te;
-	double w=game_board_width+game_offset_x;
+	double w=base_configuration.game_board_width+base_configuration.game_offset_x;
 
-	cairo_rectangle(c, 0., 0., w, game_header_h);
+	cairo_rectangle(c, 0., 0., w, base_configuration.game_header_h);
 	cairo_set_source_rgb(c, 0., 0., 0.);
 	cairo_fill(c);
 
 	snprintf(buf, sizeof buf, "L%02u", current_level+1);
 
 	cairo_set_source_rgb(c, 1., 1., 1.);
-	cairo_select_font_face(c, default_font_name, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-	cairo_set_font_size(c, game_header_h);
+	cairo_select_font_face(c, base_configuration.default_font_name, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+	cairo_set_font_size(c, base_configuration.game_header_h);
 	cairo_text_extents(c, buf, &te);
-	cairo_move_to(c, w/2-te.width/2-te.x_bearing, game_header_h/2-te.height/2-te.y_bearing);
+	cairo_move_to(c, w/2-te.width/2-te.x_bearing, base_configuration.game_header_h/2-te.height/2-te.y_bearing);
 	cairo_show_text(c, buf);
 
 }
@@ -379,20 +376,20 @@ static void _paint_board(cairo_t *c) {
 	double button_w, button_h, x_ofs, y_ofs;
 	unsigned x, y;
 
-	cairo_translate(c, game_offset_x, game_header_h);
+	cairo_translate(c, base_configuration.game_offset_x, base_configuration.game_header_h);
 
-	cairo_rectangle(c, 0., 0., game_board_width, game_board_height);
+	cairo_rectangle(c, 0., 0., base_configuration.game_board_width, base_configuration.game_board_height);
 	cairo_set_source_rgb(c, 0., 0., 0.);
 	cairo_fill(c);
 
-	button_w=game_board_width/(double)BOARD_W;
-	button_h=game_board_height/(double)BOARD_H;
+	button_w=base_configuration.game_board_width/(double)BOARD_W;
+	button_h=base_configuration.game_board_height/(double)BOARD_H;
 	x_ofs=button_w*.2/2;
 	y_ofs=button_h*.2/2;
 
 	for(y=0;y<BOARD_H;y++) {
 		for(x=0;x<BOARD_W;x++) {
-			switch(board_style) {
+			switch(base_configuration.board_style) {
 				case 1:
 					_draw_curved_rectangle(c, x_ofs+button_w*x, y_ofs+button_h*y, button_w*.8, button_h*.8);
 					break;
@@ -421,7 +418,7 @@ static void _paint_board(cairo_t *c) {
 
 }
 
-static void paint(cairo_surface_t *cs) {
+void paint(cairo_surface_t *cs) {
 	cairo_t *c;
 	c=cairo_create(cs);
 
@@ -444,8 +441,9 @@ static void game_invert(long x, long y) {
 	}
 }
 
-static void game_load(unsigned board) {
+void game_load(unsigned board) {
 	unsigned x, y;
+	current_level=board;
 try_again:
 	if(board>sizeof(level_data)/sizeof(*level_data)) {
 		board=0; /* start from the beginning */
@@ -502,7 +500,7 @@ static int game_check_win(int state) {
 	return 1; /* you win */
 }
 
-static void game_post_press(double x, double y) {
+void game_post_press(cairo_surface_t *cs, double x, double y) {
 	x*=(double)BOARD_W;
 	y*=(double)BOARD_H;
 
@@ -515,134 +513,19 @@ static void game_post_press(double x, double y) {
 		game_invert((int)x-1, (int)y);
 		game_invert((int)x+1, (int)y);
 	}
-}
 
-static void event_loop(Display *display, cairo_surface_t *cs) {
-	while(1) {
-		XEvent xev;
-		XNextEvent(display, &xev);
-		if(xev.type==Expose) {
-			if(xev.xexpose.count<1) {
-				paint(cs);
-			}
-		} else if(xev.type==ClientMessage && xev.xclient.format==32 && xev.xclient.data.l[0]==atom_wm_delete_window) {
-			/* DONE */
-			break;
-		} else if(xev.type==ConfigureNotify) {
-			if(game_board_width!=xev.xconfigure.width || game_board_height!=xev.xconfigure.height) { /* resize event */
-				game_board_width=xev.xconfigure.width-game_offset_x;
-				game_board_height=xev.xconfigure.height-game_header_h;
-				cairo_xlib_surface_set_size(cs, game_board_width+game_offset_x, game_board_height+game_header_h);
-				paint(cs);
-			}
-		} else if(xev.type==ButtonPress) {
-			game_post_press(
-				(xev.xbutton.x-(double)game_offset_x)/(double)game_board_width,
-				(xev.xbutton.y-(double)game_header_h)/(double)game_board_height
-			);
+	if(game_check_win(0)) {
+		unsigned i;
 
-			if(game_check_win(0)) {
-				unsigned i;
+		printf("You win!\n");
 
-				printf("You win!\n");
-
-				for(i=0;i<5;i++) {
-					game_win_pattern(i);
-					paint(cs);
-					XSync(display, False);
-					sleep(1);
-				}
-				game_load(++current_level);
-			}
+		for(i=0;i<5;i++) {
+			game_win_pattern(i);
 			paint(cs);
-		} else if(xev.type==ButtonRelease || xev.type==ReparentNotify) {
-			/* Ignore */
-		} else {
-			fprintf(stderr, "Unknown event %d\n", xev.type);
+			XSync(cairo_xlib_surface_get_display(cs), False);
+			sleep(1);
 		}
+		game_load(++base_configuration.current_level);
 	}
-}
-
-static Bool wait_for_MapNotify(Display *dpy, XEvent *xev, XPointer arg) {
-	return (xev->type==MapNotify) && (xev->xmap.window==(Window)arg);
-}
-
-static void map_and_wait(Display *display, Window w) {
-	XEvent xev;
-	XMapRaised(display, w);
-	XIfEvent(display, &xev, wait_for_MapNotify, (XPointer)w);
-}
-
-static cairo_surface_t *window_setup(Display *display, const char *title, unsigned w, unsigned h) {
-	Window win;
-	int screen;
-	XSetWindowAttributes swa = {
-		.event_mask = StructureNotifyMask|ExposureMask|KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask,
-		.border_pixel = 0,
-	};
-
-	screen=DefaultScreen(display);
-
-	win=XCreateWindow(display, DefaultRootWindow(display), 0, 0, w, h, 1, CopyFromParent, InputOutput, CopyFromParent, CWBorderPixel|CWEventMask, &swa);
-	XSetWMProtocols(display, win, &atom_wm_delete_window, 1);
-	map_and_wait(display, win);
-	XStoreName(display, win, title);
-
-	return cairo_xlib_surface_create(display, win, DefaultVisual(display, screen), w, h);
-}
-
-static Display *display_setup(void) {
-	Display *display;
-	display=XOpenDisplay(xdisplay_str);
-	if(!display) {
-		exit(EXIT_FAILURE);
-	}
-
-	atom_wm_delete_window=XInternAtom(display, "WM_DELETE_WINDOW", False);
-	return display;
-}
-
-static void usage(void) {
-	fprintf(stderr, "usage: %s [-display :0.0] [-font <name>] [-level <level>] [-style 0|1|2]\n", argv0);
-	exit(EXIT_FAILURE);
-}
-
-static void process_args(int argc, char **argv) {
-	int i;
-	if(!(argv0=strrchr(argv[0], '/'))) argv0=argv[0];
-
-	for(i=1;i<argc;i++) {
-		if(!strcasecmp(argv[i], "-display") && i+1<argc) {
-			xdisplay_str=argv[++i];
-		} else if(!strcasecmp(argv[i], "-font") && i+1<argc) {
-			default_font_name=argv[++i];
-		} else if(!strcasecmp(argv[i], "-level") && i+1<argc) {
-			current_level=strtoul(argv[++i], 0, 10)-1;
-		} else if(!strcasecmp(argv[i], "-style") && i+1<argc) {
-			board_style=strtoul(argv[++i], 0, 10);
-		} else if(!strcasecmp(argv[i], "-help")) {
-			usage();
-		} else {
-			printf("Unknown or invalid option '%s'\n", argv[i]);
-			usage();
-		}
-	}
-}
-
-int main(int argc, char **argv) {
-	cairo_surface_t *cs;
-	Display *display;
-
-	process_args(argc, argv);
-
-	display=display_setup();
-
-	cs=window_setup(display, "Lights-Out", game_board_width+game_offset_x, game_board_height+game_header_h);
-
-	game_load(current_level);
-
-	event_loop(display, cs);
-
-	XCloseDisplay(display);
-	return 0;
+	paint(cs);
 }
