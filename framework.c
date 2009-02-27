@@ -14,7 +14,7 @@
 static const char *argv0, *xdisplay_str, *module_name;
 static Atom atom_wm_delete_window;
 static struct module_configuration default_module_configuration = {
-	500, 500, 0, 40, 0, 1, "Charter"
+	0, 500, 500, 0, 0, 0, 1, "Charter"
 };
 static struct module_configuration current_module_configuration; /* */
 
@@ -30,11 +30,11 @@ static void event_loop(Display *display, cairo_surface_t *cs) {
 			if(xev.xexpose.count<1) {
 				paint(&current_module_configuration, cs);
 			}
-		} else if(xev.type==ClientMessage && xev.xclient.format==32 && xev.xclient.data.l[0]==atom_wm_delete_window) {
+		} else if(xev.type==ClientMessage && xev.xclient.format==32 && (Atom)xev.xclient.data.l[0]==atom_wm_delete_window) {
 			/* DONE */
 			break;
 		} else if(xev.type==ConfigureNotify) {
-			if(current_module_configuration.game_board_width!=xev.xconfigure.width || current_module_configuration.game_board_height!=xev.xconfigure.height) { /* resize event */
+			if(current_module_configuration.game_board_width!=(unsigned)xev.xconfigure.width || current_module_configuration.game_board_height!=(unsigned)xev.xconfigure.height) { /* resize event */
 				current_module_configuration.game_board_width=xev.xconfigure.width-current_module_configuration.game_offset_x;
 				current_module_configuration.game_board_height=xev.xconfigure.height-current_module_configuration.game_header_h;
 				cairo_xlib_surface_set_size(cs, current_module_configuration.game_board_width+current_module_configuration.game_offset_x, current_module_configuration.game_board_height+current_module_configuration.game_header_h);
@@ -55,7 +55,7 @@ static void event_loop(Display *display, cairo_surface_t *cs) {
 	}
 }
 
-static Bool wait_for_MapNotify(Display *dpy, XEvent *xev, XPointer arg) {
+static Bool wait_for_MapNotify(Display *_dpy_unused __attribute__((unused)), XEvent *xev, XPointer arg) {
 	return (xev->type==MapNotify) && (xev->xmap.window==(Window)arg);
 }
 
@@ -94,6 +94,7 @@ static Display *display_setup(void) {
 	return display;
 }
 
+static void usage(void) __attribute__((noreturn));
 static void usage(void) {
 	fprintf(stderr, "usage: %s [-display :0.0] [-font <name>] [-level <level>] [-style 0|1|2]\n", argv0);
 	exit(EXIT_FAILURE);
@@ -112,6 +113,8 @@ static void process_args(int argc, char **argv) {
 			default_module_configuration.current_level=strtoul(argv[++i], 0, 10)-1;
 		} else if(!strcasecmp(argv[i], "-style") && i+1<argc) {
 			default_module_configuration.board_style=strtoul(argv[++i], 0, 10);
+		} else if(!strcasecmp(argv[i], "-fullscreen")) {
+			default_module_configuration.fullscreen_fl=1;
 		} else if(!strcasecmp(argv[i], "-help")) {
 			usage();
 		} else if(!strcasecmp(argv[i], "-module") && i+1<argc) {
@@ -134,18 +137,25 @@ int main(int argc, char **argv) {
 
 	current_module_configuration=default_module_configuration;
 
-	if(!module_name || !strcmp(module_name, "lightout")) {
-		win_title="Lights-Out";
-		game_load=lightout_game_load;
-		game_post_press=lightout_game_post_press;
-		paint=lightout_paint;
-	} else if(!strcmp(module_name, "gradient")) {
+	if(!module_name || !strcmp(module_name, "gradient")) {
 		win_title="gradient";
 		game_load=gradient_game_load;
 		game_post_press=gradient_game_post_press;
 		paint=gradient_paint;
+	} else if(!strcmp(module_name, "lightout")) {
+		win_title="Lights-Out";
+		game_load=lightout_game_load;
+		game_post_press=lightout_game_post_press;
+		paint=lightout_paint;
 	} else {
 		usage();
+	}
+
+	if(current_module_configuration.fullscreen_fl) {
+		Window rootwin;
+		int x, y;
+		unsigned border_width, depth;
+		XGetGeometry(display, DefaultRootWindow(display), &rootwin, &x, &y, &current_module_configuration.game_board_width, &current_module_configuration.game_board_height, &border_width, &depth);
 	}
 
 	cs=window_setup(display, win_title, current_module_configuration.game_board_width+current_module_configuration.game_offset_x, current_module_configuration.game_board_height+current_module_configuration.game_header_h);

@@ -1,15 +1,20 @@
+MODULE:=lightout
+all :
+-include extra.mk
 ##############################################################################
-CFLAGS:=-Wall -g
-CPPFLAGS:=$(shell pkg-config --cflags cairo)
-LDLIBS:=$(shell pkg-config --libs cairo)
+PKG_CONFIG?=pkg-config
 ##############################################################################
-EXECNAME:=lightout
+PACKAGES:=cairo-xlib
+CFLAGS+=-Wall -g
+CPPFLAGS+=$(shell $(PKG_CONFIG) --cflags $(PACKAGES))
+LDLIBS+=$(shell $(PKG_CONFIG) --libs $(PACKAGES))
+##############################################################################
 SRCS:=drawutil.c framework.c gradient.c lightout.c
 OBJS:=$(SRCS:%.c=%.o)
 ##############################################################################
-all : $(EXECNAME)
+all : $(MODULE)
 
 clean :
-	$(RM) $(EXECNAME) $(OBJS)
+	-rm -rf $(MODULE) $(OBJS)
 ##############################################################################
-$(EXECNAME) : $(OBJS)
+$(MODULE) : $(OBJS)
