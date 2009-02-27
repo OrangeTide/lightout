@@ -14,7 +14,7 @@
 static const char *argv0, *xdisplay_str, *module_name;
 static Atom atom_wm_delete_window;
 static struct module_configuration default_module_configuration = {
-	0, 500, 500, 0, 0, 0, 1, "Charter"
+	0, 0, 0, 500, 500, 0, 0, 0, 1, "Charter"
 };
 static struct module_configuration current_module_configuration; /* */
 
@@ -65,7 +65,7 @@ static void map_and_wait(Display *display, Window w) {
 	XIfEvent(display, &xev, wait_for_MapNotify, (XPointer)w);
 }
 
-static cairo_surface_t *window_setup(Display *display, const char *title, unsigned w, unsigned h) {
+static cairo_surface_t *window_setup(Display *display, const char *title, int x, int y, unsigned w, unsigned h) {
 	Window win;
 	int screen;
 	XSetWindowAttributes swa = {
@@ -75,7 +75,7 @@ static cairo_surface_t *window_setup(Display *display, const char *title, unsign
 
 	screen=DefaultScreen(display);
 
-	win=XCreateWindow(display, DefaultRootWindow(display), 0, 0, w, h, 1, CopyFromParent, InputOutput, CopyFromParent, CWBorderPixel|CWEventMask, &swa);
+	win=XCreateWindow(display, DefaultRootWindow(display), x, y, w, h, 1, CopyFromParent, InputOutput, CopyFromParent, CWBorderPixel|CWEventMask, &swa);
 	XSetWMProtocols(display, win, &atom_wm_delete_window, 1);
 	map_and_wait(display, win);
 	XStoreName(display, win, title);
@@ -115,6 +115,14 @@ static void process_args(int argc, char **argv) {
 			default_module_configuration.board_style=strtoul(argv[++i], 0, 10);
 		} else if(!strcasecmp(argv[i], "-fullscreen")) {
 			default_module_configuration.fullscreen_fl=1;
+		} else if(!strcasecmp(argv[i], "-geometry")) {
+			int x, y;
+			unsigned w, h;
+			XParseGeometry(argv[++i], &x, &y, &w, &h);
+			default_module_configuration.game_board_width=w;
+			default_module_configuration.game_board_height=h;
+			default_module_configuration.window_x=x;
+			default_module_configuration.window_y=y;
 		} else if(!strcasecmp(argv[i], "-help")) {
 			usage();
 		} else if(!strcasecmp(argv[i], "-module") && i+1<argc) {
@@ -158,7 +166,7 @@ int main(int argc, char **argv) {
 		XGetGeometry(display, DefaultRootWindow(display), &rootwin, &x, &y, &current_module_configuration.game_board_width, &current_module_configuration.game_board_height, &border_width, &depth);
 	}
 
-	cs=window_setup(display, win_title, current_module_configuration.game_board_width+current_module_configuration.game_offset_x, current_module_configuration.game_board_height+current_module_configuration.game_header_h);
+	cs=window_setup(display, win_title, current_module_configuration.window_x, current_module_configuration.window_y, current_module_configuration.game_board_width+current_module_configuration.game_offset_x, current_module_configuration.game_board_height+current_module_configuration.game_header_h);
 
 	game_load(&current_module_configuration);
 
