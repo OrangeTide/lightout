@@ -17,10 +17,15 @@ struct module_configuration {
 	unsigned board_style;
 	const char *default_font_name;
 	int current_selected_object;
+	unsigned disable_fonts;
 };
 
 #ifndef MIN
 #define MIN(a,b) ((a)<(b)?(a):(b))
+#endif
+
+#ifndef NR
+#define NR(x) (sizeof(x)/sizeof*(x))
 #endif
 
 #endif

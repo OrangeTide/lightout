@@ -330,13 +330,14 @@ static void _paint_head(struct module_configuration *mc, cairo_t *c, double head
 
 	snprintf(buf, sizeof buf, "L%02u", mc->current_level+1);
 
-	cairo_set_source_rgb(c, 1., 1., 1.);
-	cairo_select_font_face(c, mc->default_font_name, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-	cairo_set_font_size(c, header_h);
-	cairo_text_extents(c, buf, &te);
-	cairo_move_to(c, w/2-te.width/2-te.x_bearing, header_h/2-te.height/2-te.y_bearing);
-	cairo_show_text(c, buf);
-
+	if(!mc->disable_fonts) {
+		cairo_set_source_rgb(c, 1., 1., 1.);
+		cairo_select_font_face(c, mc->default_font_name, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+		cairo_set_font_size(c, header_h);
+		cairo_text_extents(c, buf, &te);
+		cairo_move_to(c, w/2-te.width/2-te.x_bearing, header_h/2-te.height/2-te.y_bearing);
+		cairo_show_text(c, buf);
+	}
 }
 
 static void _paint_board(struct module_configuration *mc, cairo_t *c, double board_width, double board_height) {

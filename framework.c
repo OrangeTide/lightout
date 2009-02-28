@@ -15,9 +15,22 @@
 static const char *argv0, *xdisplay_str, *module_name;
 static Atom atom_wm_delete_window;
 static struct module_configuration default_configuration = {
-	0, 0, 0, 500, 500*1.08, 0, 1, "Charter", -1
+	0, 0, 0, 500, 500*1.08, 0, 1, "Times", -1, 0,
 };
 static struct module_configuration current_configuration; /* */
+
+static struct {
+	const char *name;
+	const char *win_title;
+	void (*module_load)(struct module_configuration *mc);
+	void (*module_post_press)(struct module_configuration *mc, cairo_surface_t *cs, double x, double y);
+	void (*module_post_action)(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action);
+	void (*module_paint)(struct module_configuration *mc, cairo_surface_t *cs);
+} module_list[] = {
+	{"lightout", "Lights-Out", lightout_load, lightout_post_press, lightout_post_action, lightout_paint},
+	{"gradient", "gradient", gradient_load, gradient_post_press, gradient_post_action, gradient_paint},
+	{"graphictest", "graphictest", graphictest_load, graphictest_post_press, graphictest_post_action, graphictest_paint},
+};
 
 static void (*module_load)(struct module_configuration *mc);
 static void (*module_post_press)(struct module_configuration *mc, cairo_surface_t *cs, double x, double y);
@@ -130,15 +143,20 @@ static Display *display_setup(void) {
 
 static void usage(void) __attribute__((noreturn));
 static void usage(void) {
-	fprintf(stderr, "usage: %s [-display :0.0] [-font <name>] [-level <level>] [-style 0|1|2]\n", argv0);
-	fprintf(stderr, "  -module graphictest\n");
-	fprintf(stderr, "  -module gradient\n");
+	unsigned i;
+	fprintf(stderr, "usage: %s [-display :0.0] [-font <name>] [-nofonts] [-level <level>] [-style 0|1|2]\n", argv0);
+	for(i=0;i<NR(module_list);i++) {
+		fprintf(stderr, "  -module %s\n", module_list[i].name);
+	}
 	exit(EXIT_FAILURE);
 }
 
 static void process_args(int argc, char **argv) {
 	int i;
-	if(!(argv0=strrchr(argv[0], '/'))) argv0=argv[0];
+	if(!(argv0=strrchr(argv[0], '/'))) argv0=argv[0]; else argv0++;
+
+	if(!module_name)
+		module_name=argv0;
 
 	for(i=1;i<argc;i++) {
 		if(!strcasecmp(argv[i], "-display") && i+1<argc) {
@@ -161,6 +179,8 @@ static void process_args(int argc, char **argv) {
 			default_configuration.window_y=y;
 		} else if(!strcasecmp(argv[i], "-help")) {
 			usage();
+		} else if(!strcasecmp(argv[i], "-nofonts")) {
+			default_configuration.disable_fonts=1;
 		} else if(!strcasecmp(argv[i], "-module") && i+1<argc) {
 			module_name=argv[++i];
 		} else {
@@ -168,6 +188,21 @@ static void process_args(int argc, char **argv) {
 			usage();
 		}
 	}
+}
+
+static int module_find(const char *module_name, const char **win_title) {
+	unsigned i;
+	for(i=0;i<NR(module_list);i++) {
+		if(!strcmp(module_name, module_list[i].name)) {
+			*win_title=module_list[i].win_title;
+			module_load=module_list[i].module_load;
+			module_post_press=module_list[i].module_post_press;
+			module_post_action=module_list[i].module_post_action;
+			module_paint=module_list[i].module_paint;
+			return 1; /* success */
+		}
+	}
+	return 0;
 }
 
 int main(int argc, char **argv) {
@@ -180,26 +215,8 @@ int main(int argc, char **argv) {
 	display=display_setup();
 
 	current_configuration=default_configuration;
-
-	if(!module_name || !strcmp(module_name, "graphictest")) {
-		win_title="graphictest";
-		module_load=graphictest_load;
-		module_post_press=graphictest_post_press;
-		module_post_action=graphictest_post_action;
-		module_paint=graphictest_paint;
-	} else if(!strcmp(module_name, "gradient")) {
-		win_title="gradient";
-		module_load=gradient_load;
-		module_post_press=gradient_post_press;
-		module_post_action=gradient_post_action;
-		module_paint=gradient_paint;
-	} else if(!strcmp(module_name, "lightout")) {
-		win_title="Lights-Out";
-		module_load=lightout_load;
-		module_post_press=lightout_post_press;
-		module_post_action=lightout_post_action;
-		module_paint=lightout_paint;
-	} else {
+	
+	if(!module_find(module_name, &win_title)) {
 		usage();
 	}
 
