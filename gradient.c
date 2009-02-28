@@ -3,8 +3,6 @@
 #include "framework.h"
 #include "modules.h"
 
-#define MIN(a,b) ((a)<(b)?(a):(b))
-
 void gradient_game_load(struct module_configuration *mc __attribute__((unused))) {
 	/* NOTHING TO DO */
 }

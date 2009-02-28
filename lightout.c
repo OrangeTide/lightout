@@ -319,12 +319,12 @@ static const char *level_data[] = {
 	"XXXXX"
 };
 
-static void _paint_head(struct module_configuration *mc, cairo_t *c) {
+static void _paint_head(struct module_configuration *mc, cairo_t *c, double header_h) {
 	char buf[64];
 	cairo_text_extents_t te;
-	double w=mc->game_board_width+mc->game_offset_x;
+	double w=mc->game_board_width;
 
-	cairo_rectangle(c, 0., 0., w, mc->game_header_h);
+	cairo_rectangle(c, 0., 0., w, header_h);
 	cairo_set_source_rgb(c, 0., 0., 0.);
 	cairo_fill(c);
 
@@ -332,25 +332,23 @@ static void _paint_head(struct module_configuration *mc, cairo_t *c) {
 
 	cairo_set_source_rgb(c, 1., 1., 1.);
 	cairo_select_font_face(c, mc->default_font_name, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-	cairo_set_font_size(c, mc->game_header_h);
+	cairo_set_font_size(c, header_h);
 	cairo_text_extents(c, buf, &te);
-	cairo_move_to(c, w/2-te.width/2-te.x_bearing, mc->game_header_h/2-te.height/2-te.y_bearing);
+	cairo_move_to(c, w/2-te.width/2-te.x_bearing, header_h/2-te.height/2-te.y_bearing);
 	cairo_show_text(c, buf);
 
 }
 
-static void _paint_board(struct module_configuration *mc, cairo_t *c) {
+static void _paint_board(struct module_configuration *mc, cairo_t *c, double board_width, double board_height) {
 	double button_w, button_h, x_ofs, y_ofs;
 	unsigned x, y;
 
-	cairo_translate(c, mc->game_offset_x, mc->game_header_h);
-
-	cairo_rectangle(c, 0., 0., mc->game_board_width, mc->game_board_height);
+	cairo_rectangle(c, 0., 0., board_width, board_height);
 	cairo_set_source_rgb(c, 0., 0., 0.);
 	cairo_fill(c);
 
-	button_w=mc->game_board_width/(double)BOARD_W;
-	button_h=mc->game_board_height/(double)BOARD_H;
+	button_w=board_width/(double)BOARD_W;
+	button_h=board_height/(double)BOARD_H;
 	x_ofs=button_w*.2/2;
 	y_ofs=button_h*.2/2;
 
@@ -486,12 +484,15 @@ void lightout_game_post_press(struct module_configuration *mc, cairo_surface_t *
 }
 
 void lightout_paint(struct module_configuration *mc, cairo_surface_t *cs) {
+	double header_h=mc->game_board_height*.08;
 	cairo_t *c;
 	c=cairo_create(cs);
 
-	_paint_head(mc, c);
+	_paint_head(mc, c, header_h);
 
-	_paint_board(mc, c);
+	cairo_translate(c, 0., header_h);
+
+	_paint_board(mc, c, mc->game_board_width, mc->game_board_height-header_h);
 
 	cairo_show_page(c);
 	cairo_destroy(c);
