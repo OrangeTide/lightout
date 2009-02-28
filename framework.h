@@ -12,7 +12,7 @@ enum framework_action {
 struct module_configuration {
 	unsigned fullscreen_fl;
 	int window_x, window_y;
-	unsigned game_board_width, game_board_height;
+	unsigned board_width, board_height;
 	unsigned current_level;
 	unsigned board_style;
 	const char *default_font_name;

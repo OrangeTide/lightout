@@ -14,15 +14,15 @@
 
 static const char *argv0, *xdisplay_str, *module_name;
 static Atom atom_wm_delete_window;
-static struct module_configuration default_module_configuration = {
+static struct module_configuration default_configuration = {
 	0, 0, 0, 500, 500*1.08, 0, 1, "Charter", -1
 };
-static struct module_configuration current_module_configuration; /* */
+static struct module_configuration current_configuration; /* */
 
-static void (*game_load)(struct module_configuration *mc);
-static void (*game_post_press)(struct module_configuration *mc, cairo_surface_t *cs, double x, double y);
-static void (*game_post_action)(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action);
-static void (*paint)(struct module_configuration *mc, cairo_surface_t *cs);
+static void (*module_load)(struct module_configuration *mc);
+static void (*module_post_press)(struct module_configuration *mc, cairo_surface_t *cs, double x, double y);
+static void (*module_post_action)(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action);
+static void (*module_paint)(struct module_configuration *mc, cairo_surface_t *cs);
 
 static void event_loop(Display *display, cairo_surface_t *cs) {
 	while(1) {
@@ -30,24 +30,24 @@ static void event_loop(Display *display, cairo_surface_t *cs) {
 		XNextEvent(display, &xev);
 		if(xev.type==Expose) {
 			if(xev.xexpose.count<1) {
-				paint(&current_module_configuration, cs);
+				module_paint(&current_configuration, cs);
 			}
 		} else if(xev.type==ClientMessage && xev.xclient.format==32 && (Atom)xev.xclient.data.l[0]==atom_wm_delete_window) {
 			/* DONE */
 			break;
 		} else if(xev.type==ConfigureNotify) {
-			if(current_module_configuration.game_board_width!=(unsigned)xev.xconfigure.width || current_module_configuration.game_board_height!=(unsigned)xev.xconfigure.height) { /* resize event */
-				current_module_configuration.game_board_width=xev.xconfigure.width;
-				current_module_configuration.game_board_height=xev.xconfigure.height;
-				cairo_xlib_surface_set_size(cs, current_module_configuration.game_board_width, current_module_configuration.game_board_height);
-				paint(&current_module_configuration, cs);
+			if(current_configuration.board_width!=(unsigned)xev.xconfigure.width || current_configuration.board_height!=(unsigned)xev.xconfigure.height) { /* resize event */
+				current_configuration.board_width=xev.xconfigure.width;
+				current_configuration.board_height=xev.xconfigure.height;
+				cairo_xlib_surface_set_size(cs, current_configuration.board_width, current_configuration.board_height);
+				module_paint(&current_configuration, cs);
 			}
 		} else if(xev.type==ButtonPress) {
-			game_post_press(
-				&current_module_configuration,
+			module_post_press(
+				&current_configuration,
 				cs,
-				xev.xbutton.x/(double)current_module_configuration.game_board_width,
-				xev.xbutton.y/(double)current_module_configuration.game_board_height
+				xev.xbutton.x/(double)current_configuration.board_width,
+				xev.xbutton.y/(double)current_configuration.board_height
 			);
 		} else if(xev.type==KeyPress) {
 			KeySym sym;
@@ -79,7 +79,7 @@ static void event_loop(Display *display, cairo_surface_t *cs) {
 			}
 
 			if(action!=ACT_NONE) {
-				game_post_action(&current_module_configuration, cs, action);
+				module_post_action(&current_configuration, cs, action);
 			}
 		} else if(xev.type==ButtonRelease || xev.type==ReparentNotify || xev.type==KeyRelease) {
 			/* Ignore */
@@ -144,21 +144,21 @@ static void process_args(int argc, char **argv) {
 		if(!strcasecmp(argv[i], "-display") && i+1<argc) {
 			xdisplay_str=argv[++i];
 		} else if(!strcasecmp(argv[i], "-font") && i+1<argc) {
-			default_module_configuration.default_font_name=argv[++i];
+			default_configuration.default_font_name=argv[++i];
 		} else if(!strcasecmp(argv[i], "-level") && i+1<argc) {
-			default_module_configuration.current_level=strtoul(argv[++i], 0, 10)-1;
+			default_configuration.current_level=strtoul(argv[++i], 0, 10)-1;
 		} else if(!strcasecmp(argv[i], "-style") && i+1<argc) {
-			default_module_configuration.board_style=strtoul(argv[++i], 0, 10);
+			default_configuration.board_style=strtoul(argv[++i], 0, 10);
 		} else if(!strcasecmp(argv[i], "-fullscreen")) {
-			default_module_configuration.fullscreen_fl=1;
+			default_configuration.fullscreen_fl=1;
 		} else if(!strcasecmp(argv[i], "-geometry")) {
 			int x, y;
 			unsigned w, h;
 			XParseGeometry(argv[++i], &x, &y, &w, &h);
-			default_module_configuration.game_board_width=w;
-			default_module_configuration.game_board_height=h;
-			default_module_configuration.window_x=x;
-			default_module_configuration.window_y=y;
+			default_configuration.board_width=w;
+			default_configuration.board_height=h;
+			default_configuration.window_x=x;
+			default_configuration.window_y=y;
 		} else if(!strcasecmp(argv[i], "-help")) {
 			usage();
 		} else if(!strcasecmp(argv[i], "-module") && i+1<argc) {
@@ -179,40 +179,40 @@ int main(int argc, char **argv) {
 
 	display=display_setup();
 
-	current_module_configuration=default_module_configuration;
+	current_configuration=default_configuration;
 
 	if(!module_name || !strcmp(module_name, "graphictest")) {
 		win_title="graphictest";
-		game_load=graphictest_game_load;
-		game_post_press=graphictest_game_post_press;
-		game_post_action=graphictest_game_post_action;
-		paint=graphictest_paint;
+		module_load=graphictest_load;
+		module_post_press=graphictest_post_press;
+		module_post_action=graphictest_post_action;
+		module_paint=graphictest_paint;
 	} else if(!strcmp(module_name, "gradient")) {
 		win_title="gradient";
-		game_load=gradient_game_load;
-		game_post_press=gradient_game_post_press;
-		game_post_action=gradient_game_post_action;
-		paint=gradient_paint;
+		module_load=gradient_load;
+		module_post_press=gradient_post_press;
+		module_post_action=gradient_post_action;
+		module_paint=gradient_paint;
 	} else if(!strcmp(module_name, "lightout")) {
 		win_title="Lights-Out";
-		game_load=lightout_game_load;
-		game_post_press=lightout_game_post_press;
-		game_post_action=lightout_game_post_action;
-		paint=lightout_paint;
+		module_load=lightout_load;
+		module_post_press=lightout_post_press;
+		module_post_action=lightout_post_action;
+		module_paint=lightout_paint;
 	} else {
 		usage();
 	}
 
-	if(current_module_configuration.fullscreen_fl) {
+	if(current_configuration.fullscreen_fl) {
 		Window rootwin;
 		int x, y;
 		unsigned border_width, depth;
-		XGetGeometry(display, DefaultRootWindow(display), &rootwin, &x, &y, &current_module_configuration.game_board_width, &current_module_configuration.game_board_height, &border_width, &depth);
+		XGetGeometry(display, DefaultRootWindow(display), &rootwin, &x, &y, &current_configuration.board_width, &current_configuration.board_height, &border_width, &depth);
 	}
 
-	cs=window_setup(display, win_title, current_module_configuration.window_x, current_module_configuration.window_y, current_module_configuration.game_board_width, current_module_configuration.game_board_height);
+	cs=window_setup(display, win_title, current_configuration.window_x, current_configuration.window_y, current_configuration.board_width, current_configuration.board_height);
 
-	game_load(&current_module_configuration);
+	module_load(&current_configuration);
 
 	event_loop(display, cs);
 
