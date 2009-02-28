@@ -1,4 +1,4 @@
-MODULE:=lightout
+MODULE:=graphictest
 all :
 -include extra.mk
 ##############################################################################
@@ -9,7 +9,7 @@ CFLAGS+=-Wall -g
 CPPFLAGS+=$(shell $(PKG_CONFIG) --cflags $(PACKAGES))
 LDLIBS+=$(shell $(PKG_CONFIG) --libs $(PACKAGES))
 ##############################################################################
-SRCS:=drawutil.c framework.c gradient.c lightout.c
+SRCS:=drawutil.c framework.c gradient.c graphictest.c lightout.c
 OBJS:=$(SRCS:%.c=%.o)
 ##############################################################################
 all : $(MODULE)

@@ -3,24 +3,27 @@
 #include "framework.h"
 #include "modules.h"
 
-void gradient_game_load(struct module_configuration *mc __attribute__((unused))) {
+void graphictest_game_load(struct module_configuration *mc __attribute__((unused))) {
 	/* NOTHING TO DO */
 }
 
-void gradient_game_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x, double y) {
+void graphictest_game_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x, double y) {
 	/* just repaint on clicks */
-	gradient_paint(mc, cs);
+	graphictest_paint(mc, cs);
 }
 
-void gradient_game_post_action(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action) {
+void graphictest_game_post_action(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action) {
 	/* NOTHING TO DO */
 }
 
-void gradient_paint(struct module_configuration *mc, cairo_surface_t *cs) {
+void graphictest_paint(struct module_configuration *mc, cairo_surface_t *cs) {
 	cairo_t *c;
 	cairo_pattern_t *cp, *cn;
+	double smaller=MIN(mc->game_board_width, mc->game_board_height);
 
 	c=cairo_create(cs);
+
+	cairo_set_line_width(c, smaller*.02);
 
 	cp=cairo_pattern_create_linear(0., 0., 0., mc->game_board_height);
 	cairo_pattern_set_filter(cp, CAIRO_FILTER_GAUSSIAN);
@@ -39,6 +42,12 @@ void gradient_paint(struct module_configuration *mc, cairo_surface_t *cs) {
 	cairo_rectangle(c, mc->game_board_width/2., 0., mc->game_board_width/2., mc->game_board_height);
 	cairo_set_source(c, cn);
 	cairo_fill(c);
+
+	cairo_arc(c, mc->game_board_width/2., mc->game_board_height/2., smaller/3., 0., 2*M_PI);
+	cairo_set_source_rgb(c, 1., 1., 1);
+	cairo_fill_preserve(c);
+	cairo_set_source_rgb(c, 0., 0., 0);
+	cairo_stroke(c);
 
 	cairo_show_page(c);
 	cairo_destroy(c);

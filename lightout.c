@@ -370,7 +370,13 @@ static void _paint_board(struct module_configuration *mc, cairo_t *c, double boa
 			} else {
 				cairo_set_source_rgb(c, 0.2, 0.2, 0.6);
 			}
-			cairo_fill(c);
+			if(mc->current_selected_object==(x+y*BOARD_W)) {
+				cairo_fill_preserve(c);
+				cairo_set_source_rgb(c, 1., 1., 1.);
+				cairo_stroke(c);
+			} else {
+				cairo_fill(c);
+			}
 
 		}
 	}
@@ -452,12 +458,8 @@ try_again:
 	printf("You are now playing level #%d\n", mc->current_level+1);
 }
 
-void lightout_game_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x, double y) {
-	x*=(double)BOARD_W;
-	y*=(double)BOARD_H;
-
-	/* check that value is in range - ignore out of range */
-	if(x>=0. && x<=(double)BOARD_W && y>=0. && y<=(double)BOARD_H) {
+static void game_do_move(unsigned x, unsigned y) {
+	if(x>=0 && x<BOARD_W && y>=0 && y<BOARD_H) {
 		/* fprintf(stderr, "Push %d, %d\n", (int)x, (int)y); */
 		game_invert((int)x, (int)y);
 		game_invert((int)x, (int)y-1);
@@ -465,7 +467,9 @@ void lightout_game_post_press(struct module_configuration *mc, cairo_surface_t *
 		game_invert((int)x-1, (int)y);
 		game_invert((int)x+1, (int)y);
 	}
+}
 
+static void game_do_if_win(struct module_configuration *mc, cairo_surface_t *cs) {
 	if(game_check_win(0)) {
 		unsigned i;
 
@@ -479,8 +483,64 @@ void lightout_game_post_press(struct module_configuration *mc, cairo_surface_t *
 		}
 		mc->current_level++;
 		lightout_game_load(mc);
+		lightout_paint(mc, cs);
+	}
+}
+
+void lightout_game_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x, double y) {
+	x*=(double)BOARD_W;
+	y*=(double)BOARD_H;
+
+	/* check that value is in range - ignore out of range */
+	if(x>=0. && x<=(double)BOARD_W && y>=0. && y<=(double)BOARD_H) {
+		game_do_move(x, y);
+		mc->current_selected_object=-1; /* stop highlighting an object */
+	}
+
+	lightout_paint(mc, cs);
+
+	game_do_if_win(mc, cs);
+}
+
+void lightout_game_post_action(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action) {
+	const unsigned max_object=BOARD_W*BOARD_H;
+
+	printf("key = %d\n", action);
+
+	/* check that selection is in range */
+	if(mc->current_selected_object<0 || mc->current_selected_object>=max_object) {
+		mc->current_selected_object=BOARD_W*BOARD_H/2; /* highlight a default object */
+	}
+
+	switch(action) {
+		case ACT_RIGHT:
+			if(mc->current_selected_object<max_object-1)
+				mc->current_selected_object++;
+			break;
+		case ACT_LEFT:
+			if(mc->current_selected_object>0)
+				mc->current_selected_object--;
+			break;
+		case ACT_UP:
+			if(mc->current_selected_object>=BOARD_W)
+				mc->current_selected_object-=BOARD_W;
+			break;
+		case ACT_DOWN:
+			if(mc->current_selected_object<=max_object-BOARD_W)
+				mc->current_selected_object+=BOARD_W;
+			break;
+		case ACT_SELECT: {
+			unsigned x, y;
+			x=mc->current_selected_object%BOARD_W;
+			y=mc->current_selected_object/BOARD_W;
+			game_do_move(x, y);
+			break;
+		}
+		case ACT_NONE: ;
 	}
 	lightout_paint(mc, cs);
+
+	game_do_if_win(mc, cs);
 }
 
 void lightout_paint(struct module_configuration *mc, cairo_surface_t *cs) {

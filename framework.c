@@ -1,6 +1,7 @@
 /* framework.c - Jon Mayo - PUBLIC DOMAIN - February 2009
  * framework for running various applications */
 #include <X11/X.h>
+#include <X11/keysym.h>
 #include <cairo-xlib.h>
 #include <cairo.h>
 #include <math.h>
@@ -14,12 +15,13 @@
 static const char *argv0, *xdisplay_str, *module_name;
 static Atom atom_wm_delete_window;
 static struct module_configuration default_module_configuration = {
-	0, 0, 0, 500, 500*1.08, 0, 1, "Charter"
+	0, 0, 0, 500, 500*1.08, 0, 1, "Charter", -1
 };
 static struct module_configuration current_module_configuration; /* */
 
 static void (*game_load)(struct module_configuration *mc);
 static void (*game_post_press)(struct module_configuration *mc, cairo_surface_t *cs, double x, double y);
+static void (*game_post_action)(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action);
 static void (*paint)(struct module_configuration *mc, cairo_surface_t *cs);
 
 static void event_loop(Display *display, cairo_surface_t *cs) {
@@ -47,7 +49,39 @@ static void event_loop(Display *display, cairo_surface_t *cs) {
 				xev.xbutton.x/(double)current_module_configuration.game_board_width,
 				xev.xbutton.y/(double)current_module_configuration.game_board_height
 			);
-		} else if(xev.type==ButtonRelease || xev.type==ReparentNotify) {
+		} else if(xev.type==KeyPress) {
+			KeySym sym;
+			enum framework_action action;
+			sym=XKeycodeToKeysym(display, xev.xkey.keycode, 0);
+
+			/* XConvertCase(sym, &sym, &sym_upper); */
+
+			switch(sym) {
+				case XK_Left:
+					action=ACT_LEFT;
+					break;
+				case XK_Up:
+					action=ACT_UP;
+					break;
+				case XK_Right:
+					action=ACT_RIGHT;
+					break;
+				case XK_Down:
+					action=ACT_DOWN;
+					break;
+				case XK_F1:
+				case XK_Return:
+				case XK_KP_5:
+					action=ACT_SELECT;
+					break;
+				default:
+					action=ACT_NONE;
+			}
+
+			if(action!=ACT_NONE) {
+				game_post_action(&current_module_configuration, cs, action);
+			}
+		} else if(xev.type==ButtonRelease || xev.type==ReparentNotify || xev.type==KeyRelease) {
 			/* Ignore */
 		} else {
 			fprintf(stderr, "Unknown event %d\n", xev.type);
@@ -97,6 +131,8 @@ static Display *display_setup(void) {
 static void usage(void) __attribute__((noreturn));
 static void usage(void) {
 	fprintf(stderr, "usage: %s [-display :0.0] [-font <name>] [-level <level>] [-style 0|1|2]\n", argv0);
+	fprintf(stderr, "  -module graphictest\n");
+	fprintf(stderr, "  -module gradient\n");
 	exit(EXIT_FAILURE);
 }
 
@@ -145,15 +181,23 @@ int main(int argc, char **argv) {
 
 	current_module_configuration=default_module_configuration;
 
-	if(!module_name || !strcmp(module_name, "gradient")) {
+	if(!module_name || !strcmp(module_name, "graphictest")) {
+		win_title="graphictest";
+		game_load=graphictest_game_load;
+		game_post_press=graphictest_game_post_press;
+		game_post_action=graphictest_game_post_action;
+		paint=graphictest_paint;
+	} else if(!strcmp(module_name, "gradient")) {
 		win_title="gradient";
 		game_load=gradient_game_load;
 		game_post_press=gradient_game_post_press;
+		game_post_action=gradient_game_post_action;
 		paint=gradient_paint;
 	} else if(!strcmp(module_name, "lightout")) {
 		win_title="Lights-Out";
 		game_load=lightout_game_load;
 		game_post_press=lightout_game_post_press;
+		game_post_action=lightout_game_post_action;
 		paint=lightout_paint;
 	} else {
 		usage();
