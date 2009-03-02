@@ -1,4 +1,4 @@
-MODULE:=graphictest
+MODULE:=lightout
 all :
 -include extra.mk
 ##############################################################################
