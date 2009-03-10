@@ -5,15 +5,18 @@
 #include <cairo-xlib.h>
 #include <cairo.h>
 #include <math.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/queue.h>
+#include <sys/select.h>
 #include <unistd.h>
 #include "framework.h"
 
 static const char *argv0, *xdisplay_str, *module_name;
 static Atom atom_wm_delete_window;
+static sig_atomic_t keep_going=1;
 static struct module_configuration default_configuration = {
 	0, 0, 0, 500, 500*1.08, 0, 1, "Times", -1, 0,
 };
@@ -25,68 +28,100 @@ static void (*module_post_press)(struct module_configuration *mc, cairo_surface_
 static void (*module_post_action)(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action);
 static void (*module_paint)(struct module_configuration *mc, cairo_surface_t *cs);
 
-static void event_loop(Display *display, cairo_surface_t *cs) {
-	while(1) {
-		XEvent xev;
-		XNextEvent(display, &xev);
-		if(xev.type==Expose) {
-			if(xev.xexpose.count<1) {
-				module_paint(&current_configuration, cs);
-			}
-		} else if(xev.type==ClientMessage && xev.xclient.format==32 && (Atom)xev.xclient.data.l[0]==atom_wm_delete_window) {
-			/* DONE */
+static void event_resize(Display *display, cairo_surface_t *cs, XEvent *xev) {
+	if(current_configuration.board_width!=(unsigned)xev->xconfigure.width || current_configuration.board_height!=(unsigned)xev->xconfigure.height) { /* resize event */
+		current_configuration.board_width=xev->xconfigure.width;
+		current_configuration.board_height=xev->xconfigure.height;
+		cairo_xlib_surface_set_size(cs, current_configuration.board_width, current_configuration.board_height);
+		module_paint(&current_configuration, cs);
+	}
+}
+
+static void event_keypress(Display *display, cairo_surface_t *cs, XEvent *xev) {
+	KeySym sym;
+	enum framework_action action;
+
+	sym=XKeycodeToKeysym(display, xev->xkey.keycode, 0);
+
+	/* XConvertCase(sym, &sym, &sym_upper); */
+
+	switch(sym) {
+		case XK_Left:
+			action=ACT_LEFT;
 			break;
-		} else if(xev.type==ConfigureNotify) {
-			if(current_configuration.board_width!=(unsigned)xev.xconfigure.width || current_configuration.board_height!=(unsigned)xev.xconfigure.height) { /* resize event */
-				current_configuration.board_width=xev.xconfigure.width;
-				current_configuration.board_height=xev.xconfigure.height;
-				cairo_xlib_surface_set_size(cs, current_configuration.board_width, current_configuration.board_height);
-				module_paint(&current_configuration, cs);
-			}
-		} else if(xev.type==ButtonPress) {
-			module_post_press(
-				&current_configuration,
-				cs,
-				xev.xbutton.x/(double)current_configuration.board_width,
-				xev.xbutton.y/(double)current_configuration.board_height
-			);
-		} else if(xev.type==KeyPress) {
-			KeySym sym;
-			enum framework_action action;
-			sym=XKeycodeToKeysym(display, xev.xkey.keycode, 0);
+		case XK_Up:
+			action=ACT_UP;
+			break;
+		case XK_Right:
+			action=ACT_RIGHT;
+			break;
+		case XK_Down:
+			action=ACT_DOWN;
+			break;
+		case XK_F1:
+		case XK_Return:
+		case XK_KP_5:
+			action=ACT_SELECT;
+			break;
+		default:
+			action=ACT_NONE;
+	}
 
-			/* XConvertCase(sym, &sym, &sym_upper); */
+	if(action!=ACT_NONE) {
+		module_post_action(&current_configuration, cs, action);
+	}
+}
 
-			switch(sym) {
-				case XK_Left:
-					action=ACT_LEFT;
-					break;
-				case XK_Up:
-					action=ACT_UP;
-					break;
-				case XK_Right:
-					action=ACT_RIGHT;
-					break;
-				case XK_Down:
-					action=ACT_DOWN;
-					break;
-				case XK_F1:
-				case XK_Return:
-				case XK_KP_5:
-					action=ACT_SELECT;
-					break;
-				default:
-					action=ACT_NONE;
-			}
+static void event_loop(Display *display, cairo_surface_t *cs) {
+	int fdmax, res;
+	fd_set rfds;
+	struct timeval tv;
 
-			if(action!=ACT_NONE) {
-				module_post_action(&current_configuration, cs, action);
-			}
-		} else if(xev.type==ButtonRelease || xev.type==ReparentNotify || xev.type==KeyRelease) {
-			/* Ignore */
-		} else {
-			fprintf(stderr, "Unknown event %d\n", xev.type);
+	while(keep_going) {
+		XEvent xev;
+
+		XFlush(display); /* flush before going to sleep */
+
+		FD_ZERO(&rfds);
+
+		fdmax=ConnectionNumber(display);
+		FD_SET(ConnectionNumber(display), &rfds);
+
+		tv.tv_sec=3600; /* TODO: check timer queue */
+		tv.tv_usec=0;
+		
+		res=select(fdmax+1, &rfds, 0, 0, &tv);
+		if(res) {
+			// while(XCheckMaskEvent(display, ~ExposureMask, &xev)) { }
+			do {
+				XNextEvent(display, &xev);
+				/* fprintf(stderr, "processing event.. %d\n", xev.type); */
+				if(xev.type==Expose) {
+					if(xev.xexpose.count<1) {
+						module_paint(&current_configuration, cs);
+					}
+				} else if(xev.type==ClientMessage && xev.xclient.format==32 && (Atom)xev.xclient.data.l[0]==atom_wm_delete_window) {
+					keep_going=0; /* DONE */
+					break;
+				} else if(xev.type==ConfigureNotify) {
+					event_resize(display, cs, &xev);
+				} else if(xev.type==ButtonPress) {
+					module_post_press(
+						&current_configuration,
+						cs,
+						xev.xbutton.x/(double)current_configuration.board_width,
+						xev.xbutton.y/(double)current_configuration.board_height
+					);
+				} else if(xev.type==KeyPress) {
+					event_keypress(display, cs, &xev);
+				} else if(xev.type==ButtonRelease || xev.type==ReparentNotify || xev.type==KeyRelease) {
+					/* Ignore */
+				} else {
+					fprintf(stderr, "Unknown event %d\n", xev.type);
+				}
+ 			} while(XEventsQueued(display, QueuedAlready)); 
 		}
+		/* TODO: check timer queue */
 	}
 }
 
@@ -240,6 +275,7 @@ int main(int argc, char **argv) {
 
 	module_load(&current_configuration);
 
+	module_paint(&current_configuration, cs); /* apply the first paint */
 	event_loop(display, cs);
 
 	XCloseDisplay(display);
