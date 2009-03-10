@@ -13,6 +13,7 @@
 
 #define BOARD_W 5
 #define BOARD_H 5
+#define HEADER_H_SCALE .08
 
 static int board_state[BOARD_W][BOARD_H];
 
@@ -470,7 +471,7 @@ static void lightout_do_move(unsigned x, unsigned y) {
 }
 
 static void lightout_paint(struct module_configuration *mc, cairo_surface_t *cs) {
-	double header_h=mc->board_height*.08;
+	double header_h=mc->board_height*HEADER_H_SCALE;
 	cairo_t *c;
 	c=cairo_create(cs);
 
@@ -503,6 +504,7 @@ static void lightout_do_if_win(struct module_configuration *mc, cairo_surface_t 
 }
 
 static void lightout_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x, double y) {
+	y-=HEADER_H_SCALE;
 	x*=(double)BOARD_W;
 	y*=(double)BOARD_H;
 
