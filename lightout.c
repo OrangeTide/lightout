@@ -520,7 +520,7 @@ static void lightout_post_press(struct module_configuration *mc, cairo_surface_t
 static void lightout_post_action(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action) {
 	const unsigned max_object=BOARD_W*BOARD_H;
 
-	printf("key = %d\n", action);
+	/* fprintf(stderr, "key = %d\n", action); */
 
 	/* check that selection is in range */
 	if(mc->current_selected_object<0 || mc->current_selected_object>=max_object) {
