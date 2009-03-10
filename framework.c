@@ -8,9 +8,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/queue.h>
 #include <unistd.h>
 #include "framework.h"
-#include "modules.h"
 
 static const char *argv0, *xdisplay_str, *module_name;
 static Atom atom_wm_delete_window;
@@ -18,19 +18,7 @@ static struct module_configuration default_configuration = {
 	0, 0, 0, 500, 500*1.08, 0, 1, "Times", -1, 0,
 };
 static struct module_configuration current_configuration; /* */
-
-static struct {
-	const char *name;
-	const char *win_title;
-	void (*module_load)(struct module_configuration *mc);
-	void (*module_post_press)(struct module_configuration *mc, cairo_surface_t *cs, double x, double y);
-	void (*module_post_action)(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action);
-	void (*module_paint)(struct module_configuration *mc, cairo_surface_t *cs);
-} module_list[] = {
-	{"lightout", "Lights-Out", lightout_load, lightout_post_press, lightout_post_action, lightout_paint},
-	{"gradient", "gradient", gradient_load, gradient_post_press, gradient_post_action, gradient_paint},
-	{"graphictest", "graphictest", graphictest_load, graphictest_post_press, graphictest_post_action, graphictest_paint},
-};
+static LIST_HEAD(module_list, module_entry) module_list;
 
 static void (*module_load)(struct module_configuration *mc);
 static void (*module_post_press)(struct module_configuration *mc, cairo_surface_t *cs, double x, double y);
@@ -143,10 +131,10 @@ static Display *display_setup(void) {
 
 static void usage(void) __attribute__((noreturn));
 static void usage(void) {
-	unsigned i;
+	struct module_entry *curr;
 	fprintf(stderr, "usage: %s [-display :0.0] [-font <name>] [-nofonts] [-level <level>] [-style 0|1|2]\n", argv0);
-	for(i=0;i<NR(module_list);i++) {
-		fprintf(stderr, "  -module %s\n", module_list[i].name);
+	for(curr=module_list.lh_first;curr;curr=curr->list.le_next) {
+		fprintf(stderr, "  -module %s\n", curr->name);
 	}
 	exit(EXIT_FAILURE);
 }
@@ -190,19 +178,40 @@ static void process_args(int argc, char **argv) {
 	}
 }
 
-static int module_find(const char *module_name, const char **win_title) {
-	unsigned i;
-	for(i=0;i<NR(module_list);i++) {
-		if(!strcmp(module_name, module_list[i].name)) {
-			*win_title=module_list[i].win_title;
-			module_load=module_list[i].module_load;
-			module_post_press=module_list[i].module_post_press;
-			module_post_action=module_list[i].module_post_action;
-			module_paint=module_list[i].module_paint;
+static int module_get(const char *module_name, const char **win_title) {
+	struct module_entry *curr;
+	for(curr=module_list.lh_first;curr;curr=curr->list.le_next) {
+		if(!strcmp(module_name, curr->name)) {
+			*win_title=curr->win_title;
+			module_load=curr->module_load;
+			module_post_press=curr->module_post_press;
+			module_post_action=curr->module_post_action;
+			module_paint=curr->module_paint;
 			return 1; /* success */
 		}
 	}
 	return 0;
+}
+
+int module_register(const char *name, const char *win_title, void (*module_load)(struct module_configuration *mc), void (*module_post_press)(struct module_configuration *mc, cairo_surface_t *cs, double x, double y), void (*module_post_action)(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action), void (*module_paint)(struct module_configuration *mc, cairo_surface_t *cs)) {
+	struct module_entry *e;
+
+	e=calloc(1, sizeof *e);
+	if(!e) {
+		perror("calloc()");
+		return 0; /* failure */
+	}
+
+	/* there are no plans to free/unregister these entries */
+	e->name=name;
+	e->win_title=win_title;
+	e->module_load=module_load;
+	e->module_post_press=module_post_press;
+	e->module_post_action=module_post_action;
+	e->module_paint=module_paint;
+	LIST_INSERT_HEAD(&module_list, e, list);
+
+	return 1; /* success */
 }
 
 int main(int argc, char **argv) {
@@ -215,8 +224,8 @@ int main(int argc, char **argv) {
 	display=display_setup();
 
 	current_configuration=default_configuration;
-	
-	if(!module_find(module_name, &win_title)) {
+
+	if(!module_get(module_name, &win_title)) {
 		usage();
 	}
 

@@ -1,5 +1,15 @@
 #ifndef FRAMEWORK_H
 #define FRAMEWORK_H
+#include <sys/queue.h>
+
+#ifndef MIN
+#define MIN(a,b) ((a)<(b)?(a):(b))
+#endif
+
+#ifndef NR
+#define NR(x) (sizeof(x)/sizeof*(x))
+#endif
+
 enum framework_action {
 	ACT_NONE,
 	ACT_UP,
@@ -20,12 +30,15 @@ struct module_configuration {
 	unsigned disable_fonts;
 };
 
-#ifndef MIN
-#define MIN(a,b) ((a)<(b)?(a):(b))
-#endif
+struct module_entry {
+	const char *name;
+	const char *win_title;
+	void (*module_load)(struct module_configuration *mc);
+	void (*module_post_press)(struct module_configuration *mc, cairo_surface_t *cs, double x, double y);
+	void (*module_post_action)(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action);
+	void (*module_paint)(struct module_configuration *mc, cairo_surface_t *cs);
+	LIST_ENTRY(module_entry) list;
+};
 
-#ifndef NR
-#define NR(x) (sizeof(x)/sizeof*(x))
-#endif
-
+int module_register(const char *name, const char *win_title, void (*module_load)(struct module_configuration *mc), void (*module_post_press)(struct module_configuration *mc, cairo_surface_t *cs, double x, double y), void (*module_post_action)(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action), void (*module_paint)(struct module_configuration *mc, cairo_surface_t *cs));
 #endif

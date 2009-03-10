@@ -1,22 +1,12 @@
 #include <cairo.h>
 #include <math.h>
 #include "framework.h"
-#include "modules.h"
 
-void graphictest_load(struct module_configuration *mc __attribute__((unused))) {
+static void graphictest_load(struct module_configuration *mc __attribute__((unused))) {
 	/* NOTHING TO DO */
 }
 
-void graphictest_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x, double y) {
-	/* just repaint on clicks */
-	graphictest_paint(mc, cs);
-}
-
-void graphictest_post_action(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action) {
-	/* NOTHING TO DO */
-}
-
-void graphictest_paint(struct module_configuration *mc, cairo_surface_t *cs) {
+static void graphictest_paint(struct module_configuration *mc, cairo_surface_t *cs) {
 	cairo_t *c;
 	cairo_pattern_t *cp, *cn;
 	double smaller=MIN(mc->board_width, mc->board_height);
@@ -52,4 +42,18 @@ void graphictest_paint(struct module_configuration *mc, cairo_surface_t *cs) {
 	cairo_show_page(c);
 	cairo_destroy(c);
 	cairo_pattern_destroy(cp);
+}
+
+static void graphictest_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x, double y) {
+	/* just repaint on clicks */
+	graphictest_paint(mc, cs);
+}
+
+static void graphictest_post_action(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action) {
+	/* NOTHING TO DO */
+}
+
+static void init(void) __attribute__((constructor));
+static void init(void) {
+	module_register("graphictest", "Graphic Test", graphictest_load, graphictest_post_press, graphictest_post_action, graphictest_paint);
 }

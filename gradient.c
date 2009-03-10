@@ -1,22 +1,12 @@
 #include <cairo.h>
 #include <math.h>
 #include "framework.h"
-#include "modules.h"
 
-void gradient_load(struct module_configuration *mc __attribute__((unused))) {
+static void gradient_load(struct module_configuration *mc __attribute__((unused))) {
 	/* NOTHING TO DO */
 }
 
-void gradient_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x, double y) {
-	/* just repaint on clicks */
-	gradient_paint(mc, cs);
-}
-
-void gradient_post_action(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action) {
-	/* NOTHING TO DO */
-}
-
-void gradient_paint(struct module_configuration *mc, cairo_surface_t *cs) {
+static void gradient_paint(struct module_configuration *mc, cairo_surface_t *cs) {
 	cairo_t *c;
 	cairo_pattern_t *cp, *cn;
 
@@ -43,4 +33,18 @@ void gradient_paint(struct module_configuration *mc, cairo_surface_t *cs) {
 	cairo_show_page(c);
 	cairo_destroy(c);
 	cairo_pattern_destroy(cp);
+}
+
+static void gradient_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x, double y) {
+	/* just repaint on clicks */
+	gradient_paint(mc, cs);
+}
+
+static void gradient_post_action(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action) {
+	/* NOTHING TO DO */
+}
+
+static void init(void) __attribute__((constructor));
+static void init(void) {
+	module_register("gradient", "Gradient", gradient_load, gradient_post_press, gradient_post_action, gradient_paint);
 }

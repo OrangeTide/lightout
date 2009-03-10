@@ -10,7 +10,6 @@
 #include <unistd.h>
 #include "drawutil.h"
 #include "framework.h"
-#include "modules.h"
 
 #define BOARD_W 5
 #define BOARD_H 5
@@ -436,7 +435,7 @@ static int lightout_check_win(int state) {
 	return 1; /* you win */
 }
 
-void lightout_load(struct module_configuration *mc) {
+static void lightout_load(struct module_configuration *mc) {
 	unsigned x, y;
 try_again:
 	if(mc->current_level>sizeof(level_data)/sizeof(*level_data)) {
@@ -470,6 +469,21 @@ static void lightout_do_move(unsigned x, unsigned y) {
 	}
 }
 
+static void lightout_paint(struct module_configuration *mc, cairo_surface_t *cs) {
+	double header_h=mc->board_height*.08;
+	cairo_t *c;
+	c=cairo_create(cs);
+
+	_paint_head(mc, c, header_h);
+
+	cairo_translate(c, 0., header_h);
+
+	_paint_board(mc, c, mc->board_width, mc->board_height-header_h);
+
+	cairo_show_page(c);
+	cairo_destroy(c);
+}
+
 static void lightout_do_if_win(struct module_configuration *mc, cairo_surface_t *cs) {
 	if(lightout_check_win(0)) {
 		unsigned i;
@@ -488,7 +502,7 @@ static void lightout_do_if_win(struct module_configuration *mc, cairo_surface_t 
 	}
 }
 
-void lightout_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x, double y) {
+static void lightout_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x, double y) {
 	x*=(double)BOARD_W;
 	y*=(double)BOARD_H;
 
@@ -503,7 +517,7 @@ void lightout_post_press(struct module_configuration *mc, cairo_surface_t *cs, d
 	lightout_do_if_win(mc, cs);
 }
 
-void lightout_post_action(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action) {
+static void lightout_post_action(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action) {
 	const unsigned max_object=BOARD_W*BOARD_H;
 
 	printf("key = %d\n", action);
@@ -544,17 +558,7 @@ void lightout_post_action(struct module_configuration *mc, cairo_surface_t *cs, 
 	lightout_do_if_win(mc, cs);
 }
 
-void lightout_paint(struct module_configuration *mc, cairo_surface_t *cs) {
-	double header_h=mc->board_height*.08;
-	cairo_t *c;
-	c=cairo_create(cs);
-
-	_paint_head(mc, c, header_h);
-
-	cairo_translate(c, 0., header_h);
-
-	_paint_board(mc, c, mc->board_width, mc->board_height-header_h);
-
-	cairo_show_page(c);
-	cairo_destroy(c);
+static void init(void) __attribute__((constructor));
+static void init(void) {
+	module_register("lightout", "Lights-Out", lightout_load, lightout_post_press, lightout_post_action, lightout_paint);
 }
