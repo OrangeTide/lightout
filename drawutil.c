@@ -1,5 +1,7 @@
 /* drawutil.c - Jon Mayo - PUBLIC DOMAIN - February 2009
  */
+#include <assert.h>
+#include <stddef.h>
 #include <cairo.h>
 #include <math.h>
 #include "drawutil.h"
@@ -34,4 +36,10 @@ void drawutil_curved_rectangle(cairo_t *c, double x, double y, double w, double 
 	cairo_curve_to(c, x+w, y+h, x+w, y+h, x+w/2., y+h);
 	cairo_curve_to(c, x, y+h, x, y+h, x, y+h/2.);
 	cairo_restore(c);
+}
+
+void drawutil_set_source_rgb(cairo_t *c, const double *rgb) {
+	assert(c != NULL);
+	assert(rgb != NULL);
+	cairo_set_source_rgb (c, rgb[0], rgb[1], rgb[2]);
 }

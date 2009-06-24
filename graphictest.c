@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <cairo.h>
 #include <math.h>
 #include "framework.h"
@@ -44,16 +45,16 @@ static void graphictest_paint(struct module_configuration *mc, cairo_surface_t *
 	cairo_pattern_destroy(cp);
 }
 
-static void graphictest_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x, double y) {
+static void graphictest_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x __attribute__((unused)), double y __attribute__((unused))) {
 	/* just repaint on clicks */
 	graphictest_paint(mc, cs);
 }
 
-static void graphictest_post_action(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action) {
+static void graphictest_post_action(struct module_configuration *mc __attribute__((unused)), cairo_surface_t *cs __attribute__((unused)), enum framework_action action __attribute__((unused))) {
 	/* NOTHING TO DO */
 }
 
 static void init(void) __attribute__((constructor));
 static void init(void) {
-	module_register("graphictest", "Graphic Test", graphictest_load, graphictest_post_press, graphictest_post_action, graphictest_paint);
+	module_register("graphictest", "Graphic Test", graphictest_load, graphictest_post_press, graphictest_post_action, graphictest_paint, NULL);
 }

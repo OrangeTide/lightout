@@ -15,7 +15,28 @@
 #define BOARD_H 5
 #define HEADER_H_SCALE .08
 
-static int board_state[BOARD_W][BOARD_H];
+static unsigned char board_state[BOARD_W][BOARD_H];
+static unsigned char board_dirty[BOARD_W][BOARD_H];
+static int board_header_dirty=1, board_all_dirty=1;
+static cairo_surface_t *mask_surface;
+
+enum {
+	BACKGROUND_COLOR,
+	TILE_OFF_COLOR,
+	TILE_ON_COLOR,
+	HIGHLIGHT_COLOR,
+	TEXT_COLOR,
+	OUTLINE_COLOR,
+};
+
+static double color_table[][3] = {
+	{WHITE, WHITE, WHITE}, /* background */
+	{GREY1, GREY1, GREY1}, /* button off */
+	{GREY2, GREY2, GREY2}, /* button on */
+	{BLACK, BLACK, BLACK}, /* button highlight */
+	{BLACK, BLACK, BLACK}, /* text */
+	{WHITE, WHITE, WHITE}, /* text outline */
+};
 
 static const char *level_data[] = {
 	"....."
@@ -319,85 +340,139 @@ static const char *level_data[] = {
 	"XXXXX"
 };
 
-static void _paint_head(struct module_configuration *mc, cairo_t *c, double header_h) {
+static void _paint_head(struct module_configuration *mc, cairo_t *c, double header_h, int mask_mode) {
 	char buf[64];
 	cairo_text_extents_t te;
 	double w=mc->board_width;
 
-	cairo_rectangle(c, 0., 0., w, header_h);
-	cairo_set_source_rgb(c, 0., 0., 0.);
-	cairo_fill(c);
-
-	snprintf(buf, sizeof buf, "L%02u", mc->current_level+1);
+	if(!board_header_dirty) {
+		return; /* ignore */
+	}
 
 	if(!mc->disable_fonts) {
-		cairo_set_source_rgb(c, 1., 1., 1.);
+		cairo_rectangle(c, 0., 0., w, header_h);
+		if(mask_mode && mc->use_shaped) {
+			cairo_set_operator(c, CAIRO_OPERATOR_CLEAR);
+		}
+		drawutil_set_source_rgb(c, color_table[BACKGROUND_COLOR]);
+		cairo_fill(c);
+
+		cairo_set_operator(c, CAIRO_OPERATOR_OVER);
+
+		snprintf(buf, sizeof buf, "L%02u", mc->current_level+1);
+
 		cairo_select_font_face(c, mc->default_font_name, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
 		cairo_set_font_size(c, header_h);
 		cairo_text_extents(c, buf, &te);
 		cairo_move_to(c, w/2-te.width/2-te.x_bearing, header_h/2-te.height/2-te.y_bearing);
-		cairo_show_text(c, buf);
+
+		if(mc->use_shaped) {
+			cairo_set_line_width(c, 1.5);
+			cairo_text_path(c, buf);
+			drawutil_set_source_rgb(c, color_table[TEXT_COLOR]);
+			cairo_fill_preserve(c);
+			drawutil_set_source_rgb(c, color_table[OUTLINE_COLOR]);
+			cairo_stroke(c);
+		} else {
+			drawutil_set_source_rgb(c, color_table[TEXT_COLOR]);
+			cairo_show_text(c, buf);
+		}
 	}
+
+	if(!mask_mode)
+		board_header_dirty=0; /* header was painted */
 }
 
-static void _paint_board(struct module_configuration *mc, cairo_t *c, double board_width, double board_height) {
+static void _paint_board(struct module_configuration *mc, cairo_t *c, double board_width, double board_height, int mask_mode) {
 	double button_w, button_h, x_ofs, y_ofs;
 	unsigned x, y;
 
-	cairo_rectangle(c, 0., 0., board_width, board_height);
-	cairo_set_source_rgb(c, 0., 0., 0.);
-	cairo_fill(c);
+	if(board_all_dirty) {
+		cairo_rectangle(c, 0., 0., board_width, board_height);
+		drawutil_set_source_rgb(c, color_table[BACKGROUND_COLOR]);
+		cairo_fill(c);
+		if(!mask_mode)
+			board_all_dirty=0;
+	}
 
 	button_w=board_width/(double)BOARD_W;
 	button_h=board_height/(double)BOARD_H;
 	x_ofs=button_w*.2/2;
 	y_ofs=button_h*.2/2;
 
+	cairo_set_line_width(c, 5);
+
 	for(y=0;y<BOARD_H;y++) {
 		for(x=0;x<BOARD_W;x++) {
-			switch(mc->board_style) {
-				case 1:
-					drawutil_curved_rectangle(c, x_ofs+button_w*x, y_ofs+button_h*y, button_w*.8, button_h*.8);
-					break;
-				case 2:
-					drawutil_round_rectangle(c, x_ofs+button_w*x, y_ofs+button_h*y, button_w*.8, button_h*.8, button_w/16.);
-					break;
-				default:
-					cairo_rectangle(c, x_ofs+button_w*x, y_ofs+button_h*y, button_w*.8, button_h*.8);
-			}
+			if(board_dirty[x][y]) {
 
-			if(board_state[x][y]) {
-				cairo_set_source_rgb(c, 1.0, 0.7, 0.0);
-			} else {
-				cairo_set_source_rgb(c, 0.2, 0.2, 0.6);
-			}
-			if(mc->current_selected_object==(x+y*BOARD_W)) {
-				cairo_fill_preserve(c);
-				cairo_set_source_rgb(c, 1., 1., 1.);
-				cairo_stroke(c);
-			} else {
+				/* draw the button background */
+				cairo_rectangle(c, button_w*x-0.5, button_h*y-0.5, button_w+1, button_h+1);
+				if(mask_mode && mc->use_shaped) {
+					cairo_set_operator(c, CAIRO_OPERATOR_CLEAR);
+				}
+				drawutil_set_source_rgb(c, color_table[BACKGROUND_COLOR]);
 				cairo_fill(c);
-			}
 
+				cairo_set_operator(c, CAIRO_OPERATOR_OVER);
+
+				/* draw the button according to the current style */
+				switch(mc->board_style) {
+					case 1:
+						drawutil_curved_rectangle(c, x_ofs+button_w*x, y_ofs+button_h*y, button_w*.8, button_h*.8);
+						break;
+					case 2:
+						drawutil_round_rectangle(c, x_ofs+button_w*x, y_ofs+button_h*y, button_w*.8, button_h*.8, button_w/16.);
+						break;
+					default:
+						cairo_rectangle(c, x_ofs+button_w*x, y_ofs+button_h*y, button_w*.8, button_h*.8);
+				}
+
+				if(board_state[x][y]) {
+					drawutil_set_source_rgb(c, color_table[TILE_ON_COLOR]);
+				} else {
+					drawutil_set_source_rgb(c, color_table[TILE_OFF_COLOR]);
+				}
+
+				if(mc->current_selected_object==(int)(x+y*BOARD_W)) {
+					cairo_fill_preserve(c);
+					drawutil_set_source_rgb(c, color_table[HIGHLIGHT_COLOR]);
+					cairo_stroke(c);
+				} else {
+					cairo_fill(c);
+				}
+
+				if(!mask_mode)
+					board_dirty[x][y]=0; /* this element has been drawn */
+			}
 		}
 	}
 
 	/*
 	cairo_move_to(c, 10., 10.);
-	cairo_set_source_rgb(c, 1., 1., 1.);
+	drawutil_set_source_rgb(c, color_table[TEXT_COLOR]);
 	cairo_show_text(c, "Hello World");
 	*/
+}
 
+/* mark entire board as dirty */
+static void lightout_dirtyall(void) {
+	board_header_dirty=1;
+	memset(board_dirty, 1, sizeof board_dirty);
 }
 
 static void lightout_clear(void) {
 	memset(board_state, 0, sizeof board_state);
+	lightout_dirtyall();
+	board_header_dirty=1; /* header needs to be repainted */
+	board_all_dirty=1; /* board area needs to be repainted */
 }
 
 static void lightout_invert(long x, long y) {
 	/* fprintf(stderr, "invert %ld, %ld\n", x, y); */
 	if(x>=0 && x<BOARD_W && y>=0 && y<BOARD_H) {
 		board_state[x][y]=!board_state[x][y];
+		board_dirty[x][y]=1;
 	}
 }
 
@@ -416,12 +491,16 @@ static void lightout_win_pattern(unsigned frame) {
 
 	for(y=0;y<BOARD_H-2*dy;y++) {
 		board_state[dx][y+dy]=1;
+		board_dirty[dx][y+dy]=1;
 		board_state[BOARD_W-1-dx][y+dy]=1;
+		board_dirty[BOARD_W-1-dx][y+dy]=1;
 	}
 
 	for(x=0;x<BOARD_W-2*dx;x++) {
 		board_state[x+dx][dy]=1;
+		board_dirty[x+dx][dy]=1;
 		board_state[x+dx][BOARD_H-1-dy]=1;
+		board_dirty[x+dx][BOARD_H-1-dy]=1;
 	}
 }
 
@@ -460,7 +539,7 @@ try_again:
 }
 
 static void lightout_do_move(unsigned x, unsigned y) {
-	if(x>=0 && x<BOARD_W && y>=0 && y<BOARD_H) {
+	if(x<BOARD_W && y<BOARD_H) {
 		/* fprintf(stderr, "Push %d, %d\n", (int)x, (int)y); */
 		lightout_invert((int)x, (int)y);
 		lightout_invert((int)x, (int)y-1);
@@ -470,19 +549,91 @@ static void lightout_do_move(unsigned x, unsigned y) {
 	}
 }
 
-static void lightout_paint(struct module_configuration *mc, cairo_surface_t *cs) {
-	double header_h=mc->board_height*HEADER_H_SCALE;
+static void lightout_redraw_on_next_paint(struct module_configuration *mc) {
+	if(mc->verbose) {
+		fprintf(stderr, "%s():called.\n", __func__);
+	}
+	lightout_dirtyall();
+}
+
+static void draw(struct module_configuration *mc, cairo_surface_t *cs, int mask_mode) {
+	double header_h;
 	cairo_t *c;
+
+	if(mc->verbose>1) {
+		fprintf(stderr, "%s():drawing with cairo surface %p\n", __func__, cs);
+	}
+
 	c=cairo_create(cs);
 
-	_paint_head(mc, c, header_h);
+#if 0
+	/* make certain the destination has no junk on it */
+	cairo_set_operator(c, CAIRO_OPERATOR_CLEAR);
+	drawutil_set_source_rgb(c, color_table[BACKGROUND_COLOR]);
+	cairo_fill(c);
+#endif
+
+	cairo_set_operator(c, CAIRO_OPERATOR_OVER); /* return to normal drawing */
+
+	if(!mc->disable_fonts) {
+		header_h=mc->board_height*HEADER_H_SCALE;
+	} else {
+		header_h=0;
+	}
+
+	_paint_head(mc, c, header_h, mask_mode);
 
 	cairo_translate(c, 0., header_h);
 
-	_paint_board(mc, c, mc->board_width, mc->board_height-header_h);
+	_paint_board(mc, c, mc->board_width, mc->board_height-header_h, mask_mode);
 
-	cairo_show_page(c);
 	cairo_destroy(c);
+}
+
+/* deal with the mask surface and make sure it is the correct size */
+static void mask_surface_check(cairo_surface_t *cs, unsigned width, unsigned height) {
+	/* deal with the mask surface */
+	if(!mask_surface) {
+		mask_surface=make_mask_surface(cs, width, height);
+	} else {
+		/* detect if mask should be resized and recreate it */
+		if((int)height!=cairo_xlib_surface_get_height(mask_surface) || (int)width!=cairo_xlib_surface_get_width(mask_surface)) {
+			destroy_mask_surface(mask_surface);
+			mask_surface=make_mask_surface(cs, width, height);
+		}
+	}
+}
+
+static void lightout_paint(struct module_configuration *mc, cairo_surface_t *cs) {
+	unsigned width=mc->board_width, height=mc->board_height;
+
+	if(!cs) {
+		if(mc->verbose) {
+			fprintf(stderr, "%s():ignoring paint because surface is NULL.\n", __func__);
+		}
+		return;
+	}
+
+	if(mc->use_shaped) {
+		mask_surface_check(cs, width, height);
+
+		assert(mask_surface != NULL);
+
+		/* construct a mask */
+		if(mc->verbose) {
+			fprintf(stderr, "%s():drawing the mask\n", __func__);
+		}
+		draw(mc, mask_surface, 1);
+
+		/* uses XShapeCombineMask */
+		mask_set(cs, mask_surface);
+	}
+
+	/* draw the real thing */
+	if(mc->verbose) {
+		fprintf(stderr, "%s():drawing the graphics\n", __func__);
+	}
+	draw(mc, cs, 0);
 }
 
 static void lightout_do_if_win(struct module_configuration *mc, cairo_surface_t *cs) {
@@ -494,7 +645,7 @@ static void lightout_do_if_win(struct module_configuration *mc, cairo_surface_t 
 		for(i=0;i<5;i++) {
 			lightout_win_pattern(i);
 			lightout_paint(mc, cs);
-			XSync(cairo_xlib_surface_get_display(cs), False);
+			surface_flush(cs);
 			sleep(1);
 		}
 		mc->current_level++;
@@ -504,13 +655,20 @@ static void lightout_do_if_win(struct module_configuration *mc, cairo_surface_t 
 }
 
 static void lightout_post_press(struct module_configuration *mc, cairo_surface_t *cs, double x, double y) {
-	y-=HEADER_H_SCALE;
+	if(!mc->disable_fonts) {
+		y-=HEADER_H_SCALE;
+	}
 	x*=(double)BOARD_W;
 	y*=(double)BOARD_H;
 
 	/* check that value is in range - ignore out of range */
 	if(x>=0. && x<=(double)BOARD_W && y>=0. && y<=(double)BOARD_H) {
 		lightout_do_move(x, y);
+
+		/* mark old position as not being highlighted */
+		if(mc->current_selected_object>=0)
+			board_dirty[mc->current_selected_object%BOARD_W][mc->current_selected_object/BOARD_W]=1;
+
 		mc->current_selected_object=-1; /* stop highlighting an object */
 	}
 
@@ -519,32 +677,49 @@ static void lightout_post_press(struct module_configuration *mc, cairo_surface_t
 	lightout_do_if_win(mc, cs);
 }
 
+static void move_selection(struct module_configuration *mc, int dx, int dy) {
+	const unsigned max_object=BOARD_W*BOARD_H;
+	signed pos;
+
+	pos=mc->current_selected_object;
+
+	/* set old position as dirty */
+	board_dirty[pos%BOARD_W][pos/BOARD_W]=1;
+
+	pos+=dx;
+	pos+=dy*BOARD_W;
+
+	/* if the new position is valid, then copy it */
+	if(pos>=0 && pos<(int)max_object) {
+		mc->current_selected_object=pos;
+	}
+
+	/* set new position as dirty */
+	board_dirty[mc->current_selected_object%BOARD_W][mc->current_selected_object/BOARD_W]=1;
+}
+
 static void lightout_post_action(struct module_configuration *mc, cairo_surface_t *cs, enum framework_action action) {
 	const unsigned max_object=BOARD_W*BOARD_H;
 
 	/* fprintf(stderr, "key = %d\n", action); */
 
 	/* check that selection is in range */
-	if(mc->current_selected_object<0 || mc->current_selected_object>=max_object) {
+	if(mc->current_selected_object<0 || (unsigned)mc->current_selected_object>=max_object) {
 		mc->current_selected_object=BOARD_W*BOARD_H/2; /* highlight a default object */
 	}
 
 	switch(action) {
 		case ACT_RIGHT:
-			if(mc->current_selected_object<max_object-1)
-				mc->current_selected_object++;
+			move_selection(mc, 1, 0);
 			break;
 		case ACT_LEFT:
-			if(mc->current_selected_object>0)
-				mc->current_selected_object--;
+			move_selection(mc, -1, 0);
 			break;
 		case ACT_UP:
-			if(mc->current_selected_object>=BOARD_W)
-				mc->current_selected_object-=BOARD_W;
+			move_selection(mc, 0, -1);
 			break;
 		case ACT_DOWN:
-			if(mc->current_selected_object<=max_object-BOARD_W)
-				mc->current_selected_object+=BOARD_W;
+			move_selection(mc, 0, 1);
 			break;
 		case ACT_SELECT: {
 			unsigned x, y;
@@ -562,5 +737,5 @@ static void lightout_post_action(struct module_configuration *mc, cairo_surface_
 
 static void init(void) __attribute__((constructor));
 static void init(void) {
-	module_register("lightout", "Lights-Out", lightout_load, lightout_post_press, lightout_post_action, lightout_paint);
+	module_register("lightout", "Lights-Out", lightout_load, lightout_post_press, lightout_post_action, lightout_paint, lightout_redraw_on_next_paint);
 }
